@@ -507,6 +507,7 @@ pub enum EventType {
     IpcConfig(IpcConfig),
     BlinkCursor,
     BlinkCursorTimeout,
+    BlinkText,
     SearchNext,
     Frame,
 }
@@ -1563,6 +1564,16 @@ impl<'a, N: Notify + 'a, T: EventListener> ActionContext<'a, N, T> {
             self.mark_dirty();
         }
     }
+
+    fn update_blinking_timer(&mut self) {
+        let timer_id = TimerId::new(Topic::BlinkText, self.display.window.id());
+        self.scheduler.unschedule(timer_id);
+        if self.display.blinking {
+            let event = Event::new(EventType::BlinkText, self.display.window.id());
+            let interval = Duration::from_millis(400);
+            self.scheduler.schedule(event, interval, true, timer_id);
+        }
+    }
 }
 
 /// Identified purpose of the touch input.
@@ -1725,6 +1736,11 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                     self.ctx.display.cursor_hidden = false;
                     *self.ctx.dirty = true;
                 },
+                EventType::BlinkText => {
+                    self.ctx.display.blinking_state ^= true;
+                    self.ctx.display.pending_update.dirty = true;
+                    *self.ctx.dirty = true;
+                },
                 // Add message only if it's not already queued.
                 EventType::Message(message) if !self.ctx.message_buffer.is_queued(&message) => {
                     self.ctx.message_buffer.push(message);
@@ -1780,6 +1796,10 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                     TerminalEvent::TextAreaSizeRequest(format) => {
                         let text = format(self.ctx.size_info().into());
                         self.ctx.write_to_pty(text.into_bytes());
+                    },
+                    TerminalEvent::BlinkingChange(stat) => {
+                        self.ctx.display.blinking = stat;
+                        self.ctx.update_blinking_timer();
                     },
                     TerminalEvent::PtyWrite(text) => self.ctx.write_to_pty(text.into_bytes()),
                     TerminalEvent::MouseCursorDirty => self.reset_mouse_cursor(),
@@ -1850,6 +1870,7 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                         }
 
                         self.ctx.update_cursor_blinking();
+                        self.ctx.update_blinking_timer();
                         self.on_focus_change(is_focused);
                     },
                     WindowEvent::Occluded(occluded) => {

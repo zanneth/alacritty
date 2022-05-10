@@ -44,6 +44,9 @@ pub enum Event {
     /// Cursor blinking state has changed.
     CursorBlinkingChange,
 
+    /// Cursor blinking state has changed.
+    BlinkingChange(bool),
+
     /// New terminal content available.
     Wakeup,
 
@@ -67,6 +70,7 @@ impl Debug for Event {
             Event::PtyWrite(text) => write!(f, "PtyWrite({text})"),
             Event::Title(title) => write!(f, "Title({title})"),
             Event::CursorBlinkingChange => write!(f, "CursorBlinkingChange"),
+            Event::BlinkingChange(status) => write!(f, "BlinkingChange({})", status),
             Event::MouseCursorDirty => write!(f, "MouseCursorDirty"),
             Event::ResetTitle => write!(f, "ResetTitle"),
             Event::Wakeup => write!(f, "Wakeup"),
